@@ -1,83 +1,46 @@
-cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
+﻿# GLOBAL - minisat
 
-project(minisat)
+# === Includes ===
+cmake_policy(SET CMP0069 NEW)
+include(cmake/macros.cmake)
 
-#--------------------------------------------------------------------------------------------------
-# Configurable options:
+# === Configuration ===
+cmake_minimum_required(VERSION 3.21)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(STATIC_BINARIES "Link binaries statically." ON)
-option(USE_SORELEASE   "Use SORELEASE in shared library filename." ON)
+# Enable multi-processor build
+enable_mp()
 
-#--------------------------------------------------------------------------------------------------
-# Library version:
-
-set(MINISAT_SOMAJOR   2)
-set(MINISAT_SOMINOR   1)
-set(MINISAT_SORELEASE 0)
-
-# Compute VERSION and SOVERSION:
-if (USE_SORELEASE)
-  set(MINISAT_VERSION ${MINISAT_SOMAJOR}.${MINISAT_SOMINOR}.${MINISAT_SORELEASE})
-else()
-  set(MINISAT_VERSION ${MINISAT_SOMAJOR}.${MINISAT_SOMINOR})
-endif()
-set(MINISAT_SOVERSION ${MINISAT_SOMAJOR})
-
-#--------------------------------------------------------------------------------------------------
-# Dependencies:
-
-find_package(ZLIB)
-include_directories(${ZLIB_INCLUDE_DIR})
-include_directories(${minisat_SOURCE_DIR})
-
-#--------------------------------------------------------------------------------------------------
-# Compile flags:
-
-add_definitions(-D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS)
-
-#--------------------------------------------------------------------------------------------------
-# Build Targets:
-
-set(MINISAT_LIB_SOURCES
-    minisat/utils/Options.cc
-    minisat/utils/System.cc
-    minisat/core/Solver.cc
-    minisat/simp/SimpSolver.cc)
-
-add_library(minisat-lib-static STATIC ${MINISAT_LIB_SOURCES})
-add_library(minisat-lib-shared SHARED ${MINISAT_LIB_SOURCES})
-
-target_link_libraries(minisat-lib-shared ${ZLIB_LIBRARY})
-target_link_libraries(minisat-lib-static ${ZLIB_LIBRARY})
-
-add_executable(minisat_core minisat/core/Main.cc)
-add_executable(minisat_simp minisat/simp/Main.cc)
-
-if(STATIC_BINARIES)
-  target_link_libraries(minisat_core minisat-lib-static)
-  target_link_libraries(minisat_simp minisat-lib-static)
-else()
-  target_link_libraries(minisat_core minisat-lib-shared)
-  target_link_libraries(minisat_simp minisat-lib-shared)
+# Options
+set(WARNINGS OFF CACHE BOOL "Enables clang-tidy and warnings on clang-like compilers")
+if (WARNINGS)
+	add_compile_options("-Wall")
+    add_compile_options("-Wextra")
+    add_compile_options("-Wpedantic")
+    enable_clangtidy()
 endif()
 
-set_target_properties(minisat-lib-static PROPERTIES OUTPUT_NAME "minisat")
-set_target_properties(minisat-lib-shared
-  PROPERTIES
-    OUTPUT_NAME "minisat" 
-    VERSION ${MINISAT_VERSION}
-    SOVERSION ${MINISAT_SOVERSION})
+set(MS_NO_ITERATOR_DEBUGGING OFF CACHE BOOL "Disable iterator debugging")
+if (MS_NO_ITERATOR_DEBUGGING)
+    add_compile_definitions(_HAS_ITERATOR_DEBUGGING=0)
+endif()
 
-set_target_properties(minisat_simp       PROPERTIES OUTPUT_NAME "minisat")
+set(MS_MSVC_STATIC_RUNTIME, OFF CACHE BOOL "Use static C runtime library when taregting MSVC ABI")
+if (MS_MSVC_STATIC_RUNTIME)
+    use_static_msvc_crt()
+endif()
 
-#--------------------------------------------------------------------------------------------------
-# Installation targets:
+# === Projects ===
+project("minisat")
+add_subdirectory("src")
 
-install(TARGETS minisat-lib-static minisat-lib-shared minisat_core minisat_simp 
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib)
+add_subdirectory("examples")
 
-install(DIRECTORY minisat/mtl minisat/utils minisat/core minisat/simp
-        DESTINATION include/minisat
-        FILES_MATCHING PATTERN "*.h")
+# === Tests ===
+enable_testing()
+set(CTEST_OUTPUT_ON_FAILURE ON)
+
+add_subdirectory("tests")
+
+add_test(NAME Test7 COMMAND tests 0)
+add_test(NAME Test12 COMMAND tests 1)
