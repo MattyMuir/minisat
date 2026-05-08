@@ -25,8 +25,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <limits>
 #include <new>
 
-#include "mtl/IntTypes.h"
-#include "mtl/XAlloc.h"
+#include "../mtl/IntTypes.h"
+#include "../mtl/XAlloc.h"
 
 namespace Minisat {
 

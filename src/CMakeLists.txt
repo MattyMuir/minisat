@@ -6,7 +6,6 @@ include(CMakePackageConfigHelpers)
 
 # === Create Library ===
 add_library(minisat "core/Solver.cc" "utils/Options.cc" "utils/System.cc")
-target_include_directories(minisat PRIVATE ".")
 
 # === Link Libraries ===
 find_package(ZLIB CONFIG)
