@@ -9,7 +9,7 @@ add_library(minisat "core/Solver.cc" "utils/Options.cc" "utils/System.cc")
 
 # === Link Libraries ===
 find_package(ZLIB CONFIG)
-target_link_libraries(minisat PRIVATE ZLIB::ZLIBSTATIC)
+target_link_libraries(minisat PUBLIC ZLIB::ZLIBSTATIC)
 
 # === Feature Enables ===
 if (MS_MSVC_STATIC_RUNTIME)
