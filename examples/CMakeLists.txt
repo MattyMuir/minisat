@@ -9,7 +9,6 @@ target_link_libraries(example PRIVATE ZLIB::ZLIBSTATIC)
 
 target_link_libraries(example PRIVATE minisat)
 target_include_directories(example PRIVATE "../include/")
-target_include_directories(example PRIVATE "../src")
 
 # === Feature Enables ===
 if (MS_MSVC_STATIC_RUNTIME)

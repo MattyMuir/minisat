@@ -19,6 +19,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 **************************************************************************************************/
 
 #include <math.h>
+#include <set>
 
 #include "../mtl/Alg.h"
 #include "../mtl/Sort.h"
@@ -627,6 +628,194 @@ void Solver::rebuildOrderHeap()
         if (decision[v] && value(v) == l_Undef)
             vs.push(v);
     order_heap.build(vs);
+}
+
+bool Solver::failedLiteralCheck()
+{
+    auto toDimacs = [](Lit l) -> int {
+        return sign(l) ? -(var(l) + 1) : (var(l) + 1);
+        };
+
+    assert(decisionLevel() == 0);
+    int nbSetBefore = trail.size();
+    //     int equivsFound = 0;
+    std::set<Lit> lits2Check;
+    int maxProps = 0;
+    Lit maxLit = lit_Undef;
+    /* Turn phase saving off */
+    assert(phase_saving == opt_phase_saving);
+    int phaseBefore = phase_saving;
+    phase_saving = 0;
+
+    /* Collect all literals that appear in clauses of size 2, as branching on others will not trigger BCP... */
+    for (int i = 0; i < clauses.size(); i++)
+    {
+        int trueFound = 0;
+        int falseFound = 0;
+        std::set<Lit> tmp;
+        for (int j = 0; j < ca[clauses[i]].size(); j++)
+        {
+            if (value(ca[clauses[i]][j]) == l_True)
+            {
+                trueFound++;
+                break;
+            }
+            else if (value(ca[clauses[i]][j]) == l_False)
+            {
+                falseFound++;
+            }
+            else
+                tmp.insert(ca[clauses[i]][j]);
+        }
+        if (trueFound == 0 && falseFound <= 2)
+        {
+            lits2Check.insert(tmp.begin(), tmp.end());
+        }
+    }
+    for (int i = 0; i < learnts.size(); i++)
+    {
+        int trueFound = 0;
+        int falseFound = 0;
+        std::set<Lit> tmp;
+        for (int j = 0; j < ca[learnts[i]].size(); j++)
+        {
+            if (value(ca[learnts[i]][j]) == l_True)
+            {
+                trueFound++;
+                break;
+            }
+            else if (value(ca[learnts[i]][j]) == l_False)
+            {
+                falseFound++;
+            }
+            else
+                tmp.insert(ca[learnts[i]][j]);
+        }
+        if (trueFound == 0 && falseFound <= 2)
+        {
+            lits2Check.insert(tmp.begin(), tmp.end());
+        }
+    }
+    /* For each variable x of them:
+        - Branch on x.
+            -If conflict occurs, we can set (not x) at root level.
+            -If no conflict occurs, store all literals that were implied
+        Branch on (not x)
+            -If conflict occurs, we can set ( x) at root level.
+            - Compare implied literals to those implied by x: If for some y, x ->* y and (not x) ->* y, then y must be true in either case, thus we can set it.
+        Remember all literals that were seen here - they don't need to be checked, as branching on them again will not yield new results
+     */
+    std::set<Lit> redundant;
+    for (auto it = lits2Check.rbegin(); it != lits2Check.rend(); it++)
+    {
+
+        if (value(*it) == l_Undef && redundant.count(~(*it)) == 0)
+        {
+            std::set<Lit> literalsSet;
+            newDecisionLevel();
+            uncheckedEnqueue(~(*it));
+            CRef confl = propagate();
+            if (confl != CRef_Undef)
+            {
+                vec<Lit> ps;
+                int btLevel;
+                analyze(confl, ps, btLevel);
+                cancelUntil(0);
+                uncheckedEnqueue(ps[0]);
+                if (verbosity > 1)
+                    printf("[FLP] %d failed -> forced: %d\n", toDimacs(~(*it)), toDimacs(ps[0]));
+
+                confl = propagate();
+                if (confl != CRef_Undef)
+                {
+                    printf("got conflict, UNSAT\n");
+                    ok = false;
+                    phase_saving = phaseBefore;
+                    return false;
+                }
+            }
+            else
+            {
+                // no conflict...
+                if (trail.size() - trail_lim[0] >= maxProps)
+                {
+                    maxLit = ~*it;
+                    maxProps = trail.size() - trail_lim[0];
+                }
+                for (int i = trail.size() - 1; i > trail_lim[0]; i--)
+                {
+                    redundant.insert(trail[i]);
+                    literalsSet.insert(trail[i]);
+                }
+                cancelUntil(0);
+                newDecisionLevel();
+                uncheckedEnqueue(*it);
+                CRef confl = propagate();
+                if (confl != CRef_Undef)
+                {
+                    vec<Lit> ps;
+                    int btLevel;
+                    analyze(confl, ps, btLevel);
+                    cancelUntil(0);
+                    uncheckedEnqueue(ps[0]);
+                    if (verbosity > 1)
+                        printf("[FLP] %d failed -> forced: %d\n", toDimacs(*it), toDimacs(ps[0]));
+                    confl = propagate();
+                    if (confl != CRef_Undef)
+                    {
+                        printf("got conflict, UNSAT\n");
+                        phase_saving = phaseBefore;
+                        return false;
+                    }
+                }
+                else
+                {
+                    std::set<Lit> lit2Add;
+                    if (trail.size() - trail_lim[0] >= maxProps)
+                    {
+                        maxLit = *it;
+                        maxProps = trail.size() - trail_lim[0];
+                    }
+                    // Check for literals that were also implied when branching on the opposite case - they are implied in either case!
+                    for (int i = trail.size() - 1; i > trail_lim[0]; i--)
+                    {
+                        if (literalsSet.count(trail[i]) > 0)
+                        {
+                            lit2Add.insert(trail[i]);
+                        }
+                    }
+                    cancelUntil(0);
+                    int trailSizeBefore = trail.size();
+
+                    for (auto it2 = lit2Add.begin(); it2 != lit2Add.end(); it2++)
+                    {
+                        uncheckedEnqueue(*it);
+                        if (verbosity > 1)
+                            printf("[FLP] Both %d and %d imply %d -> forced: %d\n",
+                                toDimacs(*it), toDimacs(~(*it)), toDimacs(*it2), toDimacs(*it2));
+                    }
+                    CRef confl = propagate();
+                    if (confl != CRef_Undef)
+                    {
+                        phase_saving = phaseBefore;
+                        return false;
+                    }
+                    if (lit2Add.size() > 0 && verbosity > 1)
+                    {
+                        printf("Fixed %d literals\n", trail.size() - trailSizeBefore);
+                        printf("trail.size()=%d\n", trail.size());
+                    }
+                }
+                cancelUntil(0);
+            }
+        }
+    }
+    printf("fixed %d variables at DL0\n", trail.size() - nbSetBefore);
+    printf("Max # propagations: %d\n", maxProps);
+    printf("MaxLit: %d\n", sign(maxLit) ? (-var(maxLit)) : var(maxLit));
+    // Restore phase saving
+    phase_saving = phaseBefore;
+    return true;
 }
 
 
