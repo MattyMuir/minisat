@@ -789,7 +789,7 @@ bool Solver::failedLiteralCheck()
 
                     for (auto it2 = lit2Add.begin(); it2 != lit2Add.end(); it2++)
                     {
-                        uncheckedEnqueue(*it);
+                        uncheckedEnqueue(*it2);
                         if (verbosity > 1)
                             printf("[FLP] Both %d and %d imply %d -> forced: %d\n",
                                 toDimacs(*it), toDimacs(~(*it)), toDimacs(*it2), toDimacs(*it2));
@@ -810,9 +810,12 @@ bool Solver::failedLiteralCheck()
             }
         }
     }
-    printf("fixed %d variables at DL0\n", trail.size() - nbSetBefore);
-    printf("Max # propagations: %d\n", maxProps);
-    printf("MaxLit: %d\n", sign(maxLit) ? (-var(maxLit)) : var(maxLit));
+    if (verbosity > 0)
+    {
+        printf("fixed %d variables at DL0\n", trail.size() - nbSetBefore);
+        printf("Max # propagations: %d\n", maxProps);
+        printf("MaxLit: %d\n", sign(maxLit) ? (-var(maxLit)) : var(maxLit));
+    }
     // Restore phase saving
     phase_saving = phaseBefore;
     return true;

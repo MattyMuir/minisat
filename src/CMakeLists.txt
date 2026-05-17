@@ -12,6 +12,10 @@ find_package(ZLIB CONFIG)
 target_link_libraries(minisat PUBLIC ZLIB::ZLIBSTATIC)
 
 # === Feature Enables ===
+set_target_properties(minisat PROPERTIES
+    DEBUG_POSTFIX          "d"
+    RELWITHDEBINFO_POSTFIX "rd"
+)
 if (MS_MSVC_STATIC_RUNTIME)
     set_property(TARGET minisat PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
