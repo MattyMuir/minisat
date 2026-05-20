@@ -55,7 +55,8 @@ public:
     vec()                        : data(NULL), sz(0), cap(0)    { }
     explicit vec(Size size)      : data(NULL), sz(0), cap(0)    { growTo(size); }
     vec(Size size, const T& pad) : data(NULL), sz(0), cap(0)    { growTo(size, pad); }
-   ~vec()                                                       { clear(true); }
+    vec(vec<T>&& other) noexcept                                { other.moveTo(*this); }
+    ~vec() { clear(true); }
 
     // Pointer to first element:
     operator T*       (void)           { return data; }
